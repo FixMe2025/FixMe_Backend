@@ -100,7 +100,7 @@ class SpellCheckService:
                 max_length=512,
                 padding=True
             )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            inputs = {k: v.to(self.device) for k, v in inputs.items() if k != 'token_type_ids'}
 
             # 텍스트 생성
             with torch.no_grad():
