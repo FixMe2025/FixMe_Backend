@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - MODEL_NAME=skt/kobert-base-v1
+      - MODEL_CACHE_DIR=./models
+      - MAX_TEXT_LENGTH=2000
+    volumes:
+      - ./app:/app/app
+      - model_cache:/app/models
+    restart: unless-stopped
+
+volumes:
+  model_cache:
