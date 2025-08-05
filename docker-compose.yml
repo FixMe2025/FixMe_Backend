@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -10,9 +8,10 @@ services:
     environment:
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
-      - MODEL_NAME=skt/kobert-base-v1
+      - GENERATIVE_MODEL_NAME=beomi/EEVE-Korean-Instruct-10.8B-v1.0
       - MODEL_CACHE_DIR=./models
-      - MAX_TEXT_LENGTH=2000
+      - MAX_TEXT_LENGTH=1000
+      - USE_GPU=false
     volumes:
       - ./app:/app/app
       - model_cache:/app/models
