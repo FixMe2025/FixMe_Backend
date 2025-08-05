@@ -90,7 +90,7 @@ class SpellCheckService:
             self._ensure_models_loaded()
 
             # 입력 문장을 교정 프롬프트로 만듦
-            prompt = f"맞춤법을 교정해주세요: {text}"
+            prompt = f"수정사항: {text}"
 
             # 토큰화
             inputs = self.tokenizer(
