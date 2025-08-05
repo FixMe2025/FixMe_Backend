@@ -5,7 +5,7 @@ import logging
 
 from app.models.spellcheck import Correction
 from app.models.improvement import Suggestion
-from app.services.integrated_service import integrated_service
+from app.services.integrated_service import get_integrated_service
 from app.core.config import settings
 from pydantic import BaseModel, Field
 
@@ -60,7 +60,7 @@ async def comprehensive_check(request: ComprehensiveRequest):
         # 종합 검사 수행
         logger.info(f"Comprehensive check request: {len(request.text)} chars, improvement: {request.include_improvement}")
         
-        result = integrated_service.comprehensive_check(
+        result = get_integrated_service().comprehensive_check(
             text=request.text,
             include_improvement=request.include_improvement,
             style=request.style
@@ -116,7 +116,7 @@ async def comprehensive_check(request: ComprehensiveRequest):
 async def comprehensive_health_check():
     """모든 서비스의 종합적인 상태 확인"""
     try:
-        health_status = integrated_service.is_healthy()
+        health_status = get_integrated_service().is_healthy()
         
         overall_healthy = all(health_status.values())
         

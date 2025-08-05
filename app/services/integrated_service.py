@@ -3,9 +3,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.spellcheck import Correction
-from app.services.model_service import spell_check_service
-from app.services.improvement_service import improvement_service
-from app.services.typo_corrector_service import typo_corrector_service
+# 지연 로딩을 위해 서비스들을 함수 내에서 import
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +14,30 @@ class IntegratedCorrectionService:
     """
     
     def __init__(self):
-        self.primary_service = spell_check_service
-        self.improvement_service = improvement_service
-        self.typo_service = typo_corrector_service
+        self._primary_service = None
+        self._improvement_service = None
+        self._typo_service = None
+    
+    @property
+    def primary_service(self):
+        if self._primary_service is None:
+            from app.services.model_service import spell_check_service
+            self._primary_service = spell_check_service
+        return self._primary_service
+    
+    @property
+    def improvement_service(self):
+        if self._improvement_service is None:
+            from app.services.improvement_service import get_improvement_service
+            self._improvement_service = get_improvement_service()
+        return self._improvement_service
+    
+    @property
+    def typo_service(self):
+        if self._typo_service is None:
+            from app.services.typo_corrector_service import get_typo_corrector_service
+            self._typo_service = get_typo_corrector_service()
+        return self._typo_service
 
     def comprehensive_check(self, text: str, include_improvement: bool = True, 
                           style: str = "formal") -> Dict:
@@ -165,5 +184,14 @@ class IntegratedCorrectionService:
             "typo_corrector": self.typo_service.is_healthy()
         }
 
-# 싱글톤 인스턴스
-integrated_service = IntegratedCorrectionService()
+# 싱글톤 인스턴스 (지연 로딩)
+_integrated_service = None
+
+def get_integrated_service() -> IntegratedCorrectionService:
+    global _integrated_service
+    if _integrated_service is None:
+        _integrated_service = IntegratedCorrectionService()
+    return _integrated_service
+
+# 하위 호환성을 위한 별칭
+integrated_service = get_integrated_service()

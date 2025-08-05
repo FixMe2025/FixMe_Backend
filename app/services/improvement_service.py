@@ -12,7 +12,13 @@ class TextImprovementService:
         self.tokenizer = None
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() and settings.use_gpu else "cpu"
-        self._load_model()
+        self._models_loaded = False
+
+    def _ensure_models_loaded(self):
+        """모델이 아직 로드되지 않았다면 로딩하는 함수"""
+        if not self._models_loaded:
+            self._load_model()
+            self._models_loaded = True
 
     def _load_model(self):
         try:
@@ -38,6 +44,7 @@ class TextImprovementService:
 
     def improve_text(self, text: str, style: str = "formal") -> Dict:
         try:
+            self._ensure_models_loaded()
             # 스타일에 따른 프롬프트 생성
             prompt = self._create_prompt(text, style)
             
@@ -130,6 +137,7 @@ class TextImprovementService:
 
     def is_healthy(self) -> bool:
         try:
+            self._ensure_models_loaded()
             if self.model is None or self.tokenizer is None:
                 return False
             
@@ -139,5 +147,14 @@ class TextImprovementService:
         except Exception:
             return False
 
-# 싱글톤 인스턴스
-improvement_service = TextImprovementService()
+# 싱글톤 인스턴스 (지연 로딩)
+_improvement_service = None
+
+def get_improvement_service() -> TextImprovementService:
+    global _improvement_service
+    if _improvement_service is None:
+        _improvement_service = TextImprovementService()
+    return _improvement_service
+
+# 하위 호환성을 위한 별칭
+improvement_service = get_improvement_service()

@@ -63,7 +63,7 @@ class TypoCorrectorService:
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_length=len(text.split()) + 50,
+                    max_length=min(512, int(len(inputs['input_ids'][0]) * 1.5)),
                     num_beams=3,
                     early_stopping=True,
                     do_sample=False,
@@ -137,4 +137,10 @@ class TypoCorrectorService:
             return False
 
 # 싱글톤 인스턴스 (선택적으로 사용)
-typo_corrector_service = TypoCorrectorService()
+_typo_corrector_service = None
+
+def get_typo_corrector_service() -> TypoCorrectorService:
+    global _typo_corrector_service
+    if _typo_corrector_service is None:
+        _typo_corrector_service = TypoCorrectorService()
+    return _typo_corrector_service
