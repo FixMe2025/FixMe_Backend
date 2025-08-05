@@ -8,7 +8,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
-    generative_model_name: str = "beomi/EEVE-Korean-Instruct-10.8B-v1.0"
+    generative_model_name: str = "theSOL1/kogrammar-base"
+    secondary_model_name: str = "j5ng/et5-typos-corrector"
     model_cache_dir: str = "./models"
     max_text_length: int = 1000
     use_gpu: bool = False
