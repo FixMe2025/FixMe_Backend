@@ -8,7 +8,7 @@ from app.models.spellcheck import (
     ErrorResponse,
     Correction
 )
-from app.services.integrated_service import integrated_service
+from app.services.integrated_service import get_integrated_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ async def check_spelling(request: SpellCheckRequest):
         
         # 맞춤법 검사 수행 (통합 서비스 사용)
         logger.info("Received a spell check request.")
-        result = integrated_service.quick_spell_check(request.text)
+        result = get_integrated_service().quick_spell_check(request.text)
         
         if result["status"] == "error":
             raise HTTPException(
@@ -85,7 +85,7 @@ async def check_spelling(request: SpellCheckRequest):
 )
 async def health_check():
     try:
-        health_status = integrated_service.is_healthy()
+        health_status = get_integrated_service().is_healthy()
         is_healthy = health_status["primary_spell_check"]
         
         if is_healthy:

@@ -3,7 +3,7 @@ from typing import Dict, Any
 import logging
 
 from app.models.improvement import ImprovementRequest, ImprovementResponse, Suggestion
-from app.services.integrated_service import integrated_service
+from app.services.integrated_service import get_integrated_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ async def improve_text(request: ImprovementRequest) -> ImprovementResponse:
         logger.info(f"Text improvement request received: {len(request.text)} characters")
         
         # 텍스트 개선 서비스 호출 (통합 서비스 사용)
-        result = integrated_service.quick_improvement(request.text, request.style)
+        result = get_integrated_service().quick_improvement(request.text, request.style)
         
         # 에러가 있는 경우 처리
         if "error" in result:
@@ -52,12 +52,12 @@ async def health_check() -> Dict[str, Any]:
     문장 개선 서비스의 상태를 확인합니다.
     """
     try:
-        health_status = integrated_service.is_healthy()
+        health_status = get_integrated_service().is_healthy()
         is_healthy = health_status["improvement_service"]
         return {
             "status": "healthy" if is_healthy else "unhealthy",
             "service": "text_improvement",
-            "model_loaded": integrated_service.improvement_service.model is not None,
+            "model_loaded": get_integrated_service().improvement_service.model is not None,
             "all_services": health_status
         }
     except Exception as e:
@@ -83,7 +83,7 @@ async def service_info() -> Dict[str, Any]:
             "model": settings.generative_model_name,
             "max_text_length": settings.max_text_length,
             "supported_styles": ["formal", "casual", "academic", "business"],
-            "device": integrated_service.improvement_service.device
+            "device": get_integrated_service().improvement_service.device
         }
     except Exception as e:
         logger.error(f"Failed to get service info: {e}")
