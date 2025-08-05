@@ -2,15 +2,16 @@ import os
 from typing import Optional
 from pathlib import Path
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
-    model_name: str = "skt/kobert-base-v1"
+    generative_model_name: str = "beomi/EEVE-Korean-Instruct-10.8B-v1.0"
     model_cache_dir: str = "./models"
-    max_text_length: int = 2000
+    max_text_length: int = 1000
+    use_gpu: bool = False
     
     # FastAPI 설정
     api_host: str = "0.0.0.0"
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        protected_namespaces = ()
 
+
+def get_settings() -> Settings:
+    return Settings()
 
 settings = Settings()

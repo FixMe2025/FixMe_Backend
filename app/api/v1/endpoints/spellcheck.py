@@ -5,7 +5,8 @@ import logging
 from app.models.spellcheck import (
     SpellCheckRequest, 
     SpellCheckResponse, 
-    ErrorResponse
+    ErrorResponse,
+    Correction
 )
 from app.services.model_service import spell_check_service
 from app.core.config import settings
@@ -40,10 +41,11 @@ async def check_spelling(request: SpellCheckRequest):
             )
         
         # 맞춤법 검사 수행
-        logger.info(f"Processing text: {request.text[:50]}...")
-        corrected_text, corrections = spell_check_service.check_spelling(request.text)
+        logger.info("Received a spell check request.")
+        corrected_text, corrections_data = spell_check_service.check_spelling(request.text)
         
         # 응답 생성
+        corrections = [Correction(**c.dict()) for c in corrections_data]
         response = SpellCheckResponse(
             original_text=request.text,
             corrected_text=corrected_text,
@@ -82,8 +84,7 @@ async def health_check():
         if is_healthy:
             return {
                 "status": "healthy",
-                "message": "맞춤법 검사 서비스가 정상 동작중입니다.",
-                "model": settings.model_name
+                "message": "맞춤법 검사 서비스가 정상 동작중입니다."
             }
         else:
             return JSONResponse(
