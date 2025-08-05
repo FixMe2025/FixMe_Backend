@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from typing import List, Dict, Optional
 import logging
 import torch
@@ -21,7 +21,7 @@ class TextImprovementService:
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir
             )
-            self.model = AutoModelForCausalLM.from_pretrained(
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
@@ -42,18 +42,24 @@ class TextImprovementService:
             prompt = self._create_prompt(text, style)
             
             # 토큰화
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+            inputs = self.tokenizer(
+                prompt, 
+                return_tensors="pt", 
+                truncation=True, 
+                max_length=512,
+                padding=True
+            )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # 생성
+            # 생성 - Seq2Seq 모델에 맞게 수정
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=200,
+                    max_length=len(prompt.split()) + 100,
+                    num_beams=3,
                     num_return_sequences=2,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.9,
+                    early_stopping=True,
+                    do_sample=False,
                     pad_token_id=self.tokenizer.eos_token_id
                 )
             
@@ -62,10 +68,10 @@ class TextImprovementService:
             for output in outputs:
                 generated_text = self.tokenizer.decode(output, skip_special_tokens=True)
                 improved_text = self._extract_improved_text(generated_text, prompt)
-                if improved_text and improved_text != text:
+                if improved_text and improved_text != text and improved_text.strip():
                     suggestions.append({
                         "text": improved_text,
-                        "confidence": 0.85  # 임시 confidence score
+                        "confidence": 0.85
                     })
             
             # 중복 제거
@@ -79,7 +85,7 @@ class TextImprovementService:
             return {
                 "original_text": text,
                 "improved_text": unique_suggestions[0]["text"] if unique_suggestions else text,
-                "suggestions": unique_suggestions[:3],  # 최대 3개
+                "suggestions": unique_suggestions[:3],
                 "style_applied": style
             }
             
@@ -103,21 +109,22 @@ class TextImprovementService:
         
         style_desc = style_descriptions.get(style, "자연스러운")
         
-        return f"""다음 문장을 {style_desc} 한국어로 더 자연스럽고 세련되게 개선해주세요.
-
-원문: {text}
-
-개선된 문장:"""
+        return f"다음 문장을 {style_desc} 한국어로 더 자연스럽고 세련되게 개선해주세요: {text}"
 
     def _extract_improved_text(self, generated_text: str, prompt: str) -> Optional[str]:
-        # 프롬프트 이후의 텍스트만 추출
         try:
-            if "개선된 문장:" in generated_text:
-                improved = generated_text.split("개선된 문장:")[-1].strip()
-                # 불필요한 부분 제거 (줄바꿈, 특수문자 등)
-                improved = improved.split('\n')[0].strip()
-                return improved if improved else None
-            return None
+            # 생성된 텍스트에서 개선된 부분만 추출
+            improved = generated_text.strip()
+            
+            # 프롬프트 부분 제거
+            if "개선해주세요:" in improved:
+                improved = improved.split("개선해주세요:")[-1].strip()
+            
+            # 불필요한 부분 제거
+            improved = improved.split('\n')[0].strip()
+            improved = improved.replace('"', '').replace("'", "").strip()
+            
+            return improved if improved and len(improved) > 0 else None
         except Exception:
             return None
 

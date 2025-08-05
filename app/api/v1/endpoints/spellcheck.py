@@ -8,7 +8,7 @@ from app.models.spellcheck import (
     ErrorResponse,
     Correction
 )
-from app.services.model_service import spell_check_service
+from app.services.integrated_service import integrated_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -40,15 +40,21 @@ async def check_spelling(request: SpellCheckRequest):
                 detail="빈 텍스트는 검사할 수 없습니다."
             )
         
-        # 맞춤법 검사 수행
+        # 맞춤법 검사 수행 (통합 서비스 사용)
         logger.info("Received a spell check request.")
-        corrected_text, corrections_data = spell_check_service.check_spelling(request.text)
+        result = integrated_service.quick_spell_check(request.text)
+        
+        if result["status"] == "error":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("error", "맞춤법 검사 중 오류가 발생했습니다.")
+            )
         
         # 응답 생성
-        corrections = [Correction(**c.dict()) for c in corrections_data]
+        corrections = [Correction(**c) if isinstance(c, dict) else c for c in result["corrections"]]
         response = SpellCheckResponse(
-            original_text=request.text,
-            corrected_text=corrected_text,
+            original_text=result["original_text"],
+            corrected_text=result["corrected_text"],
             corrections=corrections,
             has_errors=len(corrections) > 0,
             total_corrections=len(corrections),
@@ -79,7 +85,8 @@ async def check_spelling(request: SpellCheckRequest):
 )
 async def health_check():
     try:
-        is_healthy = spell_check_service.is_healthy()
+        health_status = integrated_service.is_healthy()
+        is_healthy = health_status["primary_spell_check"]
         
         if is_healthy:
             return {
@@ -92,7 +99,8 @@ async def health_check():
                 content={
                     "status": "unhealthy",
                     "message": "맞춤법 검사 서비스에 문제가 있습니다.",
-                    "model": settings.model_name
+                    "primary_model": settings.generative_model_name,
+                    "secondary_model": settings.secondary_model_name
                 }
             )
     except Exception as e:
@@ -115,7 +123,8 @@ async def health_check():
 async def service_info():
     return {
         "service": "FixMe 맞춤법 검사",
-        "model": settings.model_name,
+        "primary_model": settings.generative_model_name,
+        "secondary_model": settings.secondary_model_name,
         "max_text_length": settings.max_text_length,
         "version": "1.0.0"
     }
