@@ -8,13 +8,13 @@ services:
     environment:
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
-      - GENERATIVE_MODEL_NAME=theSOL1/kogrammar-base
-      - MODEL_CACHE_DIR=./models
+      - GENERATIVE_MODEL_NAME=beomi/KoAlpaca-Polyglot-5.8B
+      - MODEL_CACHE_DIR=/models
       - MAX_TEXT_LENGTH=1000
       - USE_GPU=false
     volumes:
       - ./app:/app/app
-      - model_cache:/app/models
+      - model_cache:/models
     restart: unless-stopped
 
 volumes:

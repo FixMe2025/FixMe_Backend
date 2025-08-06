@@ -125,8 +125,8 @@ async def comprehensive_health_check():
             "services": health_status,
             "message": "모든 서비스가 정상 동작중입니다." if overall_healthy else "일부 서비스에 문제가 있습니다.",
             "details": {
-                "primary_spell_check": "theSOL1/kogrammar-base 맞춤법 교정",
-                "improvement_service": "theSOL1/kogrammar-base 문장 개선", 
+                "primary_spell_check": "beomi/KoAlpaca-Polyglot-5.8B 맞춤법 교정",
+                "improvement_service": "beomi/KoAlpaca-Polyglot-5.8B 문장 개선",
                 "typo_corrector": "j5ng/et5-typos-corrector 보조 교정"
             }
         }

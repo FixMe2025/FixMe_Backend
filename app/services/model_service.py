@@ -1,8 +1,9 @@
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from typing import List, Tuple
 import logging
 import torch
 import re
+from difflib import SequenceMatcher
 
 from app.models.spellcheck import Correction
 from app.core.config import get_settings
@@ -34,6 +35,10 @@ class SpellCheckService:
             self._load_models()
             self._models_loaded = True
 
+    def load_models(self):
+        """외부에서 호출해 모델을 미리 로딩"""
+        self._ensure_models_loaded()
+
     def _load_models(self):
         """
         사전 학습된 모델과 토크나이저 로딩
@@ -45,7 +50,9 @@ class SpellCheckService:
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir
             )
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.model = AutoModelForCausalLM.from_pretrained(
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
@@ -56,10 +63,26 @@ class SpellCheckService:
             if self.device == "cpu":
                 self.model = self.model.to(self.device)
 
-            # 보조 모델은 주석 처리 (필요 시 사용)
-            logger.info(f"보조 모델 로딩 (선택 사항): {settings.secondary_model_name}")
-            # self.secondary_tokenizer = AutoTokenizer.from_pretrained(settings.secondary_model_name)
-            # self.secondary_model = AutoModelForSeq2SeqLM.from_pretrained(settings.secondary_model_name)
+            # 보조 모델 로딩 (j5ng/et5-typos-corrector)
+            logger.info(f"보조 모델 로딩: {settings.secondary_model_name}")
+            try:
+                self.secondary_tokenizer = AutoTokenizer.from_pretrained(
+                    settings.secondary_model_name,
+                    cache_dir=settings.model_cache_dir
+                )
+                self.secondary_model = AutoModelForSeq2SeqLM.from_pretrained(
+                    settings.secondary_model_name,
+                    cache_dir=settings.model_cache_dir,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    device_map="auto" if self.device == "cuda" else None
+                )
+                if self.device == "cpu":
+                    self.secondary_model = self.secondary_model.to(self.device)
+                logger.info("보조 모델 로딩 완료")
+            except Exception as e:
+                logger.warning(f"보조 모델 로딩 실패: {e}")
+                self.secondary_tokenizer = None
+                self.secondary_model = None
 
             logger.info("모델 로딩 완료")
         except Exception as e:
@@ -68,63 +91,117 @@ class SpellCheckService:
 
     def check_spelling(self, text: str) -> Tuple[str, List[Correction]]:
         """
-        입력 문장에 대해 맞춤법 교정 수행
+        입력 문장에 대해 맞춤법 교정 수행 (하이브리드 방식)
+        - 1차: j5ng/et5-typos-corrector로 기본적인 타이포 교정
+        - 2차: beomi/KoAlpaca-Polyglot-5.8B로 추가적인 문법 교정 시도
         - 반환값: (교정된 문장, 교정 리스트)
         """
         try:
             self._ensure_models_loaded()  # 모델이 로딩되어 있는지 확인
 
-            corrected_text = self._correct_with_kogrammar(text)
-            corrections = self._extract_corrections(text, corrected_text)
+            # 1차: ET5 타이포 교정기로 기본 교정 수행
+            intermediate = text
+            if self.secondary_model and self.secondary_tokenizer:
+                et5_result = self._correct_with_et5_typos(text)
+                # ET5 결과가 원문과 너무 다르면 적용하지 않음
+                if self._is_reasonable_correction(text, et5_result, threshold=0.8):
+                    intermediate = et5_result
 
-            return corrected_text, corrections
+            # 2차: KoAlpaca로 추가 교정 시도
+            final_corrected = intermediate
+            koalpaca_result = self._correct_with_koalpaca(intermediate)
+            # KoAlpaca 결과도 중간 결과와 충분히 유사할 때만 사용
+            if self._is_reasonable_correction(intermediate, koalpaca_result, threshold=0.8):
+                final_corrected = koalpaca_result
+
+            corrections = self._extract_corrections(text, final_corrected)
+
+            return final_corrected, corrections
         except Exception as e:
             logger.error(f"맞춤법 검사 중 오류: {e}")
             return text, []
 
-    def _correct_with_kogrammar(self, text: str) -> str:
+    def _correct_with_koalpaca(self, text: str) -> str:
         """
-        KoGrammar 모델을 이용한 맞춤법 교정 로직
+        KoAlpaca 모델을 이용한 맞춤법 교정 로직
         """
         try:
             self._ensure_models_loaded()
 
-            # 입력 문장을 교정 프롬프트로 만듦
-
-            prompt = f"수정사항: {text}"
-            prompt = f"맞춤법을 교정해주세요: {text}"
-
-            # 토큰화
+            prompt = f"다음 문장의 맞춤법과 문법을 교정해줘:\n{text}\n교정된 문장:"
             inputs = self.tokenizer(
                 prompt,
                 return_tensors="pt",
                 truncation=True,
-                max_length=512,
+                max_length=1024,
+                padding=True
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items() if k != 'token_type_ids'}
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=128,
+                    num_beams=5,
+                    early_stopping=True,
+                    do_sample=False,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    no_repeat_ngram_size=2
+                )
+
+            corrected = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            corrected = corrected.replace(prompt, "").strip()
+            corrected = self._clean_generated_text(corrected)
+
+            return corrected if corrected and corrected != text else text
+        except Exception as e:
+            logger.error(f"KoAlpaca 교정 중 오류: {e}")
+            return text
+
+    def _correct_with_et5_typos(self, text: str) -> str:
+        """
+        ET5 타이포 교정기를 이용한 세부 맞춤법 교정
+        """
+        try:
+            if not self.secondary_model or not self.secondary_tokenizer:
+                return text
+            
+            # ET5 모델용 입력 형식
+            inputs = self.secondary_tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=1024,
                 padding=True
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items() if k != 'token_type_ids'}
 
             # 텍스트 생성
             with torch.no_grad():
-                outputs = self.model.generate(
+                outputs = self.secondary_model.generate(
                     **inputs,
-                    max_length=min(512, inputs['input_ids'].shape[1] * 2),
+                    max_length=min(1024, inputs['input_ids'].shape[1] * 2),
                     num_beams=3,
                     early_stopping=True,
                     do_sample=False,
-                    pad_token_id=self.tokenizer.eos_token_id
+                    pad_token_id=self.secondary_tokenizer.eos_token_id
                 )
 
             # 디코딩
-            corrected = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-            # 생성된 텍스트 정리
+            corrected = self.secondary_tokenizer.decode(outputs[0], skip_special_tokens=True)
             corrected = self._clean_generated_text(corrected)
 
             return corrected if corrected and corrected != text else text
         except Exception as e:
-            logger.error(f"KoGrammar 교정 중 오류: {e}")
+            logger.error(f"ET5 타이포 교정 중 오류: {e}")
             return text
+
+    def _is_reasonable_correction(self, original: str, corrected: str, threshold: float = 0.6) -> bool:
+        """교정 결과가 원문과 지나치게 다른지 확인"""
+        if original == corrected:
+            return True
+        similarity = SequenceMatcher(None, original, corrected).ratio()
+        return similarity >= threshold
 
     def _clean_generated_text(self, text: str) -> str:
         """
