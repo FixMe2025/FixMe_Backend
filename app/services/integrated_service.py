@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class IntegratedCorrectionService:
     """
-    theSOL1/kogrammar-base와 j5ng/et5-typos-corrector를 통합한 
+    beomi/KoAlpaca-Polyglot-5.8B와 j5ng/et5-typos-corrector를 통합한
     맞춤법 교정 및 문장 개선 서비스
     """
     

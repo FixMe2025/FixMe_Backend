@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from typing import List, Dict, Optional
 import logging
 import torch
@@ -27,7 +27,9 @@ class TextImprovementService:
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir
             )
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.model = AutoModelForCausalLM.from_pretrained(
                 settings.generative_model_name,
                 cache_dir=settings.model_cache_dir,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
@@ -58,11 +60,11 @@ class TextImprovementService:
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # 생성 - Seq2Seq 모델에 맞게 수정
+            # 생성 - CausalLM 모델에 맞게 수정
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_length=len(prompt.split()) + 100,
+                    max_new_tokens=100,
                     num_beams=3,
                     num_return_sequences=2,
                     early_stopping=True,
@@ -74,6 +76,7 @@ class TextImprovementService:
             suggestions = []
             for output in outputs:
                 generated_text = self.tokenizer.decode(output, skip_special_tokens=True)
+                generated_text = generated_text.replace(prompt, "").strip()
                 improved_text = self._extract_improved_text(generated_text, prompt)
                 if improved_text and improved_text != text and improved_text.strip():
                     suggestions.append({
@@ -124,6 +127,8 @@ class TextImprovementService:
             improved = generated_text.strip()
             
             # 프롬프트 부분 제거
+            if prompt in improved:
+                improved = improved.replace(prompt, "").strip()
             if "개선해주세요:" in improved:
                 improved = improved.split("개선해주세요:")[-1].strip()
             

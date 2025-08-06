@@ -8,9 +8,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
-    generative_model_name: str = "theSOL1/kogrammar-base"
+    generative_model_name: str = "beomi/KoAlpaca-Polyglot-5.8B"
     secondary_model_name: str = "j5ng/et5-typos-corrector"
-    model_cache_dir: str = "./models"
+    model_cache_dir: str = "/models"
     max_text_length: int = 1500
     use_gpu: bool = False
     

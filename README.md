@@ -1,6 +1,6 @@
 # FixMe - 한글 맞춤법 교정 API
 
-FixMe는 FastAPI를 기반으로 구축된 한글 맞춤법 교정 API 서비스입니다. theSOL1/kogrammar-base 모델을 활용하여 정확하고 빠른 맞춤법 검사 및 교정 기능을 제공하며, j5ng/et5-typos-corrector 모델을 이용한 보조 타이포 교정도 지원합니다.
+FixMe는 FastAPI를 기반으로 구축된 한글 맞춤법 교정 API 서비스입니다. beomi/KoAlpaca-Polyglot-5.8B 모델을 활용하여 정확하고 빠른 맞춤법 검사 및 교정 기능을 제공하며, j5ng/et5-typos-corrector 모델을 이용한 보조 타이포 교정도 지원합니다.
 
 ## 주요 기능
 
@@ -15,7 +15,7 @@ FixMe는 FastAPI를 기반으로 구축된 한글 맞춤법 교정 API 서비스
 
 - **언어:** Python 3.11
 - **프레임워크:** FastAPI
-- **AI 모델:** theSOL1/kogrammar-base (주요), j5ng/et5-typos-corrector (보조)
+- **AI 모델:** beomi/KoAlpaca-Polyglot-5.8B (주요), j5ng/et5-typos-corrector (보조)
 - **컨테이너:** Docker
 
 ## API 엔드포인트
@@ -118,7 +118,7 @@ FixMe는 FastAPI를 기반으로 구축된 한글 맞춤법 교정 API 서비스
 | ----------------- | ---------------------------------- | ----------------------- |
 | `ENVIRONMENT`           | 실행 환경 (development/production) | `development`           |
 | `LOG_LEVEL`             | 로깅 레벨                          | `INFO`                  |
-| `GENERATIVE_MODEL_NAME` | 사용할 주요 생성형 모델 이름      | `theSOL1/kogrammar-base` |
+| `GENERATIVE_MODEL_NAME` | 사용할 주요 생성형 모델 이름      | `beomi/KoAlpaca-Polyglot-5.8B` |
 | `SECONDARY_MODEL_NAME`  | 보조 타이포 교정 모델 이름        | `j5ng/et5-typos-corrector` |
 | `MODEL_CACHE_DIR`       | 모델 캐시 디렉토리                 | `./models`              |
 | `MAX_TEXT_LENGTH`       | 최대 처리 가능 텍스트 길이         | `1000`                  |
