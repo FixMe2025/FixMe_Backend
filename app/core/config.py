@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     secondary_model_name: str = "j5ng/et5-typos-corrector"
     grammar_model_name: str = "theSOL1/kogrammar-base"
     model_cache_dir: str = "/models"
-    max_text_length: int = 1500
+    max_text_length: int = 2000
     use_gpu: bool = False
     
     # FastAPI 설정

@@ -36,7 +36,7 @@ class SpellCheckService:
             self._models_loaded = True
 
     def load_models(self):
-        """외부에서 호출해 모델을 미리 로딩"""
+        """외부에서 호출해 모델을 미리 로딩 (현재는 lazy-load 권장)"""
         self._ensure_models_loaded()
 
     def _load_models(self):

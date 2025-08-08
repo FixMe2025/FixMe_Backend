@@ -46,8 +46,9 @@ class LangGraphSpellPipeline:
 
         self._graph = None
 
-        self._load_models()
-        self._build_graph()
+        # lazy-load: 최초 호출 시 모델/그래프 빌드
+        # self._load_models()
+        # self._build_graph()
 
     def _load_models(self) -> None:
         try:
@@ -158,6 +159,10 @@ class LangGraphSpellPipeline:
         self._graph = graph.compile()
 
     def run(self, text: str) -> Dict[str, Any]:
+        if self.typo_model is None or self.grammar_model is None:
+            self._load_models()
+        if self._graph is None:
+            self._build_graph()
         state: PipelineState = {"input_text": text}
         result: PipelineState = self._graph.invoke(state)
 
@@ -188,6 +193,8 @@ class LangGraphSpellPipeline:
 
     def is_healthy(self) -> bool:
         try:
+            if self.typo_model is None or self.grammar_model is None:
+                self._load_models()
             return all([
                 self.typo_model is not None,
                 self.typo_tokenizer is not None,
@@ -206,5 +213,3 @@ def get_langgraph_pipeline() -> LangGraphSpellPipeline:
     if _pipeline_instance is None:
         _pipeline_instance = LangGraphSpellPipeline()
     return _pipeline_instance
-
-
