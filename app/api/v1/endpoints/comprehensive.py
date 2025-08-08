@@ -125,9 +125,9 @@ async def comprehensive_health_check():
             "services": health_status,
             "message": "모든 서비스가 정상 동작중입니다." if overall_healthy else "일부 서비스에 문제가 있습니다.",
             "details": {
-                "primary_spell_check": "beomi/KoAlpaca-Polyglot-5.8B 맞춤법 교정",
-                "improvement_service": "beomi/KoAlpaca-Polyglot-5.8B 문장 개선",
-                "typo_corrector": "j5ng/et5-typos-corrector 보조 교정"
+                "primary_spell_check": f"{settings.generative_model_name} 맞춤법 교정",
+                "improvement_service": f"{settings.generative_model_name} 문장 개선",
+                "typo_corrector": f"{settings.secondary_model_name} 보조 교정"
             }
         }
         
@@ -160,6 +160,10 @@ async def comprehensive_service_info():
             "secondary": {
                 "name": settings.secondary_model_name,
                 "purpose": "보조 타이포 교정"
+            },
+            "grammar": {
+                "name": getattr(settings, "grammar_model_name", ""),
+                "purpose": "2차 문법/자연스러움 (LangGraph 파이프라인)"
             }
         },
         "features": [

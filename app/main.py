@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.services.model_service import spell_check_service
 
 # 로깅 설정
 setup_logging()
@@ -27,10 +26,6 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
-
-@app.on_event("startup")
-async def load_models() -> None:
-    spell_check_service.load_models()
 
 @app.get("/health")
 async def health_check():

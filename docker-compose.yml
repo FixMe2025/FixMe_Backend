@@ -3,15 +3,10 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    env_file:
+      - .env
     ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=INFO
-      - GENERATIVE_MODEL_NAME=beomi/KoAlpaca-Polyglot-5.8B
-      - MODEL_CACHE_DIR=/models
-      - MAX_TEXT_LENGTH=1000
-      - USE_GPU=false
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
     volumes:
       - ./app:/app/app
       - model_cache:/models

@@ -17,7 +17,6 @@ class TypoCorrectorService:
         self.tokenizer = None
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() and settings.use_gpu else "cpu"
-        self._load_model()
 
     def _load_model(self):
         try:
@@ -42,8 +41,13 @@ class TypoCorrectorService:
             self.tokenizer = None
             self.model = None
 
+    def _ensure_model_loaded(self) -> None:
+        if self.model is None or self.tokenizer is None:
+            self._load_model()
+
     def correct_typos(self, text: str) -> Tuple[str, List[Correction]]:
         """타이포 교정을 수행합니다."""
+        self._ensure_model_loaded()
         if not self.model or not self.tokenizer:
             logger.warning("Typo corrector model not loaded, returning original text")
             return text, []
@@ -127,6 +131,7 @@ class TypoCorrectorService:
     def is_healthy(self) -> bool:
         """서비스 상태 확인"""
         try:
+            self._ensure_model_loaded()
             if self.model is None or self.tokenizer is None:
                 return False
             
