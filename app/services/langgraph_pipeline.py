@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Dict, Any, List, Optional, TypedDict
 import logging
+import re
+import unicodedata
 import torch
 
 from transformers import (
@@ -13,6 +15,7 @@ from langgraph.graph import StateGraph, END
 
 from app.models.spellcheck import Correction
 from app.core.config import get_settings
+from app.utils.text_utils import calculate_text_similarity
 
 
 logger = logging.getLogger(__name__)
@@ -99,24 +102,14 @@ class LangGraphSpellPipeline:
                 state["corrections_step1"] = []
                 return state
 
-            inputs = self.typo_tokenizer(
-                state["input_text"],
-                return_tensors="pt",
-                truncation=True,
+            corrected = self._generate_seq2seq(
+                tokenizer=self.typo_tokenizer,
+                model=self.typo_model,
+                text=state["input_text"],
+                num_beams=4,
+                do_sample=False,
                 max_length=512,
-                padding=True,
             )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.no_grad():
-                outputs = self.typo_model.generate(
-                    **inputs,
-                    max_length=min(512, int(inputs['input_ids'].shape[1] * 1.5)),
-                    num_beams=4,
-                    early_stopping=True,
-                    do_sample=False,
-                    pad_token_id=self.typo_tokenizer.eos_token_id,
-                )
-            corrected = self.typo_tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
             state["step1_text"] = corrected if corrected else state["input_text"]
             state["corrections_step1"] = self._extract_corrections(state["input_text"], state["step1_text"], "타이포/띄어쓰기")
             return state
@@ -128,24 +121,43 @@ class LangGraphSpellPipeline:
                 state["corrections_final"] = []
                 return state
 
-            inputs = self.grammar_tokenizer(
-                base_text,
-                return_tensors="pt",
-                truncation=True,
+            prompt = self._build_grammar_prompt(base_text)
+            corrected_raw = self._generate_seq2seq(
+                tokenizer=self.grammar_tokenizer,
+                model=self.grammar_model,
+                text=prompt,
+                num_beams=6,
+                do_sample=False,
                 max_length=512,
-                padding=True,
             )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            with torch.no_grad():
-                outputs = self.grammar_model.generate(
-                    **inputs,
-                    max_length=min(512, int(inputs['input_ids'].shape[1] * 1.5)),
-                    num_beams=4,
-                    early_stopping=True,
-                    do_sample=False,
-                    pad_token_id=self.grammar_tokenizer.eos_token_id,
+            corrected = self._force_single_sentence(self._clean_output(corrected_raw, base_text))
+            # 공백만 변경되었거나 변화가 없으면 강한 지시 + 샘플링으로 재시도
+            if (
+                self._is_only_spacing_change(base_text, corrected)
+                or corrected == base_text
+                or self._looks_like_prompt_echo(corrected)
+                or not self._is_semantically_close(base_text, corrected)
+            ):
+                corrected_retry_raw = self._generate_seq2seq(
+                    tokenizer=self.grammar_tokenizer,
+                    model=self.grammar_model,
+                    text=self._build_grammar_prompt_stronger(base_text),
+                    num_beams=8,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    max_length=512,
                 )
-            corrected = self.grammar_tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+                corrected_retry = self._force_single_sentence(self._clean_output(corrected_retry_raw, base_text))
+                if (
+                    corrected_retry
+                    and corrected_retry != base_text
+                    and not self._looks_like_prompt_echo(corrected_retry)
+                    and self._is_semantically_close(base_text, corrected_retry)
+                ):
+                    corrected = corrected_retry
+                else:
+                    corrected = base_text
             state["final_text"] = corrected if corrected else base_text
             state["corrections_final"] = self._extract_corrections(base_text, state["final_text"], "문법/자연스러움")
             return state
@@ -203,6 +215,127 @@ class LangGraphSpellPipeline:
             ])
         except Exception:
             return False
+
+    # --- Helpers ---
+    def _generate_seq2seq(
+        self,
+        tokenizer,
+        model,
+        text: str,
+        num_beams: int = 4,
+        do_sample: bool = False,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        max_length: int = 512,
+    ) -> str:
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_length,
+            padding=True,
+        )
+        inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        gen_kwargs: Dict[str, Any] = dict(
+            max_length=min(max_length, int(inputs["input_ids"].shape[1] * 1.5)),
+            num_beams=num_beams,
+            early_stopping=True,
+            pad_token_id=tokenizer.eos_token_id,
+            no_repeat_ngram_size=2,
+        )
+        if do_sample:
+            gen_kwargs.update(dict(do_sample=True, temperature=temperature, top_p=top_p))
+        else:
+            gen_kwargs.update(dict(do_sample=False))
+
+        with torch.no_grad():
+            outputs = model.generate(**inputs, **gen_kwargs)
+        text_out = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        # 기본 공백 정리
+        text_out = re.sub(r"\s+", " ", text_out).strip()
+        return text_out
+
+    def _build_grammar_prompt(self, text: str) -> str:
+        # 의미 보존, 자연스러움, 결과만 출력. 모델이 프롬프트를 복창해도 정답만 추출할 수 있도록 '정답:' 마커 사용
+        return (
+            "아래 문장의 모든 맞춤법, 오타, 문법을 교정하고 더 자연스럽게 바꾸세요. "
+            "의미는 보존하고, 결과만 한 문장으로 출력하세요.\n"
+            f"문장: {text}\n정답:"
+        )
+
+    def _build_grammar_prompt_stronger(self, text: str) -> str:
+        # 강한 지시 + 간단 예시(few-shot)
+        return (
+            "다음 작업을 수행하세요: (1) 오타/철자/맞춤법/띄어쓰기/문법 오류를 모두 교정, (2) 의미는 보존, (3) 결과만 출력.\n"
+            "예시) 입력: 오늘 날씨가말다. -> 출력: 오늘 날씨가 맑다.\n"
+            "입력: " + text + "\n출력:"
+        )
+
+    def _is_only_spacing_change(self, a: str, b: str) -> bool:
+        if a == b:
+            return False
+        return "".join(a.split()) == "".join(b.split())
+
+    def _looks_like_prompt_echo(self, text: str) -> bool:
+        patterns = [
+            r"아래 문장의 모든 맞춤법",
+            r"다음 작업을 수행하세요",
+            r"문장:\s*",
+            r"입력:\s*",
+            r"정답:\s*",
+            r"출력:\s*",
+        ]
+        return any(re.search(p, text) for p in patterns)
+
+    def _clean_output(self, text: str, original: str) -> str:
+        # 1) 프롬프트 잔여 제거: 정답:/출력:/문장:/입력: 등 이후만 남김
+        for marker in ["정답:", "출력:"]:
+            if marker in text:
+                text = text.split(marker, 1)[-1]
+        # 문장:, 입력:은 앞부분 제거
+        for marker in ["문장:", "입력:"]:
+            if marker in text:
+                text = text.split(marker, 1)[-1]
+        # 2) 알려진 안내문 제거
+        text = re.sub(r"아래 문장의 모든 맞춤법[^\n]*", "", text).strip()
+        text = re.sub(r"다음 작업을 수행하세요[^\n]*", "", text).strip()
+        # 3) 제어문자/결합부호 제거
+        text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+        # 4) 허용 문자만 유지(한글/영문/숫자/일부 구두점)
+        text = re.sub(r"[^가-힣a-zA-Z0-9\s.,!?'\"()\-]", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        # 5) 공백만 변경되었거나 너무 짧으면 원문 사용
+        if not text:
+            return original
+        return text
+
+    def _is_semantically_close(self, a: str, b: str) -> bool:
+        try:
+            sim = calculate_text_similarity(a, b)
+        except Exception:
+            # 간단 fallback: 공백 제거 문자열 유사도 근사
+            from difflib import SequenceMatcher
+            sim = SequenceMatcher(None, "".join(a.split()), "".join(b.split())).ratio()
+        if sim < 0.5:
+            return False
+        return self._content_coverage_ok(a, b)
+
+    def _content_coverage_ok(self, base: str, out: str) -> bool:
+        def tokens(s: str) -> List[str]:
+            return [t for t in re.split(r"\W+", s) if t and len(t) >= 2]
+        base_tokens = tokens(base)
+        if not base_tokens:
+            return True
+        covered = sum(1 for t in set(base_tokens) if t in out)
+        return covered / max(1, len(set(base_tokens))) >= 0.5
+
+    def _force_single_sentence(self, text: str) -> str:
+        # 첫 문장만 유지
+        parts = re.split(r"(?<=[.!?])\s+", text)
+        first = parts[0].strip() if parts else text.strip()
+        return first
 
 
 _pipeline_instance: Optional[LangGraphSpellPipeline] = None
