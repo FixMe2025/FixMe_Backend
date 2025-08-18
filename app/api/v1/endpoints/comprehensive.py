@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 import logging
 
 from app.models.spellcheck import Correction
-from app.models.improvement import Suggestion
+
 from app.services.integrated_service import get_integrated_service
 from app.core.config import settings
 from pydantic import BaseModel, Field
