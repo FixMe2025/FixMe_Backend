@@ -5,6 +5,7 @@ import logging
 from app.models.improvement import ImprovementRequest, ImprovementResponse, Suggestion
 from app.services.integrated_service import get_integrated_service
 
+# 문장 개선 관련 엔드포인트 정의 모듈
 router = APIRouter()
 logger = logging.getLogger(__name__)
 

@@ -9,6 +9,8 @@ from app.services.integrated_service import get_integrated_service
 from app.core.config import settings
 from pydantic import BaseModel, Field
 
+# 종합 텍스트 교정 및 개선을 처리하는 엔드포인트 모듈
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

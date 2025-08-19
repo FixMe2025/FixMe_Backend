@@ -17,7 +17,7 @@ from app.models.spellcheck import Correction
 from app.core.config import get_settings
 from app.utils.text_utils import calculate_text_similarity
 
-
+# LangGraph를 활용한 다단계 교정 파이프라인 서비스
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
@@ -49,9 +49,9 @@ class LangGraphSpellPipeline:
 
         self._graph = None
 
-        # lazy-load: 최초 호출 시 모델/그래프 빌드
-        # self._load_models()
-        # self._build_graph()
+        # 사전 로딩으로 변경 - 성능 향상
+        self._load_models()
+        self._build_graph()
 
     def _load_models(self) -> None:
         try:
@@ -106,9 +106,9 @@ class LangGraphSpellPipeline:
                 tokenizer=self.typo_tokenizer,
                 model=self.typo_model,
                 text=state["input_text"],
-                num_beams=4,
+                num_beams=2,
                 do_sample=False,
-                max_length=512,
+                max_length=256,
             )
             state["step1_text"] = corrected if corrected else state["input_text"]
             state["corrections_step1"] = self._extract_corrections(state["input_text"], state["step1_text"], "타이포/띄어쓰기")
@@ -126,9 +126,9 @@ class LangGraphSpellPipeline:
                 tokenizer=self.grammar_tokenizer,
                 model=self.grammar_model,
                 text=prompt,
-                num_beams=6,
+                num_beams=3,
                 do_sample=False,
-                max_length=512,
+                max_length=256,
             )
             corrected = self._force_single_sentence(self._clean_output(corrected_raw, base_text))
             # 공백만 변경되었거나 변화가 없으면 강한 지시 + 샘플링으로 재시도
@@ -142,11 +142,11 @@ class LangGraphSpellPipeline:
                     tokenizer=self.grammar_tokenizer,
                     model=self.grammar_model,
                     text=self._build_grammar_prompt_stronger(base_text),
-                    num_beams=8,
+                    num_beams=3,
                     do_sample=True,
                     temperature=0.7,
                     top_p=0.9,
-                    max_length=512,
+                    max_length=256,
                 )
                 corrected_retry = self._force_single_sentence(self._clean_output(corrected_retry_raw, base_text))
                 if (
@@ -171,10 +171,11 @@ class LangGraphSpellPipeline:
         self._graph = graph.compile()
 
     def run(self, text: str) -> Dict[str, Any]:
-        if self.typo_model is None or self.grammar_model is None:
-            self._load_models()
-        if self._graph is None:
-            self._build_graph()
+        # 사전 로딩으로 인해 체크 불필요
+        # if self.typo_model is None or self.grammar_model is None:
+        #     self._load_models()
+        # if self._graph is None:
+        #     self._build_graph()
         state: PipelineState = {"input_text": text}
         result: PipelineState = self._graph.invoke(state)
 

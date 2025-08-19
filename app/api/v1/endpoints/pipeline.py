@@ -6,7 +6,7 @@ import logging
 from app.services.langgraph_pipeline import get_langgraph_pipeline
 from app.models.spellcheck import Correction
 
-
+# LangGraph 기반 파이프라인 실행을 제공하는 엔드포인트 모듈
 router = APIRouter()
 logger = logging.getLogger(__name__)
 

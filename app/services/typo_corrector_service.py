@@ -7,6 +7,7 @@ import re
 from app.models.spellcheck import Correction
 from app.core.config import get_settings
 
+# 타이포 교정 전용 모델을 다루는 서비스
 logger = logging.getLogger(__name__)
 settings = get_settings()
 

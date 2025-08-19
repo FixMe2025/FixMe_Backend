@@ -5,7 +5,9 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
+# 애플리케이션 전역 설정을 관리하는 클래스와 헬퍼 함수 정의
 class Settings(BaseSettings):
+    """환경 변수 기반 설정 값들을 보관하는 클래스"""
     environment: str = "development"
     log_level: str = "INFO"
     generative_model_name: str = "beomi/KoAlpaca-Polyglot-5.8B"
@@ -13,7 +15,7 @@ class Settings(BaseSettings):
     grammar_model_name: str = "theSOL1/kogrammar-base"
     model_cache_dir: str = "/models"
     max_text_length: int = 2000
-    use_gpu: bool = False
+    use_gpu: bool = True
     
     # FastAPI 설정
     api_host: str = "0.0.0.0"
@@ -32,6 +34,8 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
+    """Settings 인스턴스를 생성하여 반환"""
     return Settings()
 
+# 기본 Settings 인스턴스 생성
 settings = Settings()

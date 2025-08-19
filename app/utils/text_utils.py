@@ -2,6 +2,7 @@ import re
 from typing import List, Tuple
 
 
+# 텍스트 처리에 사용되는 유틸리티 함수 모음
 def clean_text(text: str) -> str:
     text = text.strip()
     text = re.sub(r'\s+', ' ', text)

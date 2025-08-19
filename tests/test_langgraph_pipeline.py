@@ -3,7 +3,12 @@ import pytest
 
 from app.services.langgraph_pipeline import get_langgraph_pipeline
 
+import pytest
 
+from app.services.langgraph_pipeline import get_langgraph_pipeline
+
+
+# LangGraph 파이프라인의 동작을 검증하기 위한 테스트
 def _short_input() -> str:
     # 간단한 오타/띄어쓰기/문법 교정이 가능한 짧은 예시
     return "안녕 하세요 저녁 머거요"

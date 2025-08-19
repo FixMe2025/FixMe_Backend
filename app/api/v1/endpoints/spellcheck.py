@@ -3,14 +3,15 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.models.spellcheck import (
-    SpellCheckRequest, 
-    SpellCheckResponse, 
+    SpellCheckRequest,
+    SpellCheckResponse,
     ErrorResponse,
     Correction
 )
 from app.services.integrated_service import get_integrated_service
 from app.core.config import settings
 
+# 맞춤법 검사 기능을 제공하는 엔드포인트 모듈
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

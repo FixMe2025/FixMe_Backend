@@ -1,10 +1,12 @@
 import os
 import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
 
 
+# 파이프라인 엔드포인트를 검사하기 위한 테스트 코드
 client = TestClient(app)
 
 

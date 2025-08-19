@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 from app.models.spellcheck import Correction
 from app.core.config import get_settings
 
+# 맞춤법 검사를 담당하는 주요 서비스 클래스
 # 로깅 설정
 logger = logging.getLogger(__name__)
 settings = get_settings()
