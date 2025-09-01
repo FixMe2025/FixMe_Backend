@@ -21,20 +21,45 @@ class TextProcessor:
             
             # 마지막 청크가 아니라면 문장 경계에서 자르기
             if end_pos < len(text):
-                # 문장 끝 기호에서 자르기 시도
-                sentence_endings = ['다.', '요.', '죠.', '야.', '네.', '까.', '가.', '어.', '지.', '니.']
+                # 1순위: 문장 끝 기호에서 자르기
+                sentence_endings = [
+                    '다.', '요.', '죠.', '야.', '네.', '까.', '가.', '어.', '지.', '니.',
+                    '다!', '요!', '죠!', '야!', '네!', '까!', '가!', '어!', '지!', '니!',
+                    '다?', '요?', '죠?', '야?', '네?', '까?', '가?', '어?', '지?', '니?',
+                    '습니다.', '입니다.', '합니다.', '됩니다.'
+                ]
                 best_cut = -1
                 
                 for ending in sentence_endings:
                     pos = chunk.rfind(ending)
-                    if pos > settings.CHUNK_SIZE * 0.7:  # 청크의 70% 이상에서만
+                    if pos > settings.CHUNK_SIZE * 0.6:  # 청크의 60% 이상에서만
                         best_cut = max(best_cut, pos + len(ending))
                 
-                # 문장 끝을 못 찾으면 공백에서 자르기
+                # 2순위: 절(clause) 경계에서 자르기
                 if best_cut == -1:
+                    clause_endings = [
+                        '고,', '서,', '며,', '면,', '지만,', '는데,', '지만', '는데', 
+                        '하고', '하면', '하자', '하니까', '때문에', '이므로', '그래서'
+                    ]
+                    for ending in clause_endings:
+                        pos = chunk.rfind(ending)
+                        if pos > settings.CHUNK_SIZE * 0.5:  # 청크의 50% 이상에서만
+                            best_cut = max(best_cut, pos + len(ending))
+                
+                # 3순위: 공백에서 자르기 (어절 단위)
+                if best_cut == -1:
+                    # 역순으로 공백을 찾아서 단어를 깨뜨리지 않도록
                     space_pos = chunk.rfind(' ')
-                    if space_pos > settings.CHUNK_SIZE * 0.5:  # 청크의 50% 이상에서만
+                    if space_pos > settings.CHUNK_SIZE * 0.4:  # 청크의 40% 이상에서만
                         best_cut = space_pos
+                
+                # 4순위: 문장부호에서 자르기
+                if best_cut == -1:
+                    punctuations = [',', ';', ':', '-', '–', '—']
+                    for punct in punctuations:
+                        pos = chunk.rfind(punct)
+                        if pos > settings.CHUNK_SIZE * 0.3:  # 청크의 30% 이상에서만
+                            best_cut = max(best_cut, pos + len(punct))
                 
                 # 적절한 자르는 위치를 찾았으면 적용
                 if best_cut > 0:
@@ -60,7 +85,7 @@ class TextProcessor:
             return chunks[0]
         
         # 청크들을 연결하면서 중복 공백 제거 및 자연스러운 연결
-        result = chunks[0]
+        result = chunks[0].strip()
         
         for chunk in chunks[1:]:
             chunk = chunk.strip()
@@ -72,22 +97,36 @@ class TextProcessor:
                 last_char = result[-1]
                 first_char = chunk[0]
                 
-                # 문장 끝 기호 뒤에는 공백 추가
+                # 문장이 끝나면 공백을 추가
                 if last_char in '.!?':
                     result += " " + chunk
-                # 쉼표 뒤에는 공백 추가
-                elif last_char == ',':
+                # 절이 끝나면 공백 추가
+                elif last_char in ',;:':
                     result += " " + chunk
-                # 기본적으로는 공백으로 연결
+                # 연결어미나 어미로 끝나면 자연스럽게 연결
+                elif result.endswith(('고', '서', '며', '면', '지만', '는데', '하고', '하면', '하자', '하니까', '때문에', '이므로', '그래서')):
+                    if first_char != ' ':
+                        result += " " + chunk
+                    else:
+                        result += chunk
+                # 기본적으로는 공백으로 연결 (단어가 깨지지 않도록)
                 elif last_char != ' ' and first_char != ' ':
-                    result += " " + chunk
+                    # 단어 연결인지 확인 (한글 자소나 영문자)
+                    if (last_char.isalnum() and first_char.isalnum()) or \
+                       (ord('가') <= ord(last_char) <= ord('힣') and ord('가') <= ord(first_char) <= ord('힣')):
+                        result += " " + chunk
+                    else:
+                        result += chunk
                 else:
                     result += chunk
             else:
                 result += chunk
         
-        # 최종 정리: 중복 공백 제거
+        # 최종 정리: 중복 공백 제거하되 문장 구조는 보존
         import re
         result = re.sub(r'\s+', ' ', result).strip()
+        
+        # 문장부호 앞의 불필요한 공백 제거
+        result = re.sub(r'\s+([.!?,:;])', r'\1', result)
         
         return result
