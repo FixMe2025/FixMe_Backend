@@ -11,7 +11,7 @@ import json
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, os.path.dirname(__file__))
 
-from app.advanced_spellcheck_service import advanced_spellcheck_service
+from app.services.advanced_spellcheck_service import advanced_spellcheck_service
 
 
 def test_model_based_correction():

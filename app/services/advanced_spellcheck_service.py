@@ -6,10 +6,10 @@ from transformers import (
 )
 import traceback
 from .config import settings
-from app import diff_match_patch as dmp_module
+from app.utils import diff_match_patch as dmp_module
 from langgraph.graph import StateGraph, END
-from .state_models import GraphState
-from .workflow.nodes import WorkflowNodes
+from ..models.state_models import GraphState
+from ..workflow.nodes import WorkflowNodes
 
 
 class AdvancedSpellCheckService:

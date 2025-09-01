@@ -11,7 +11,7 @@ import json
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, os.path.dirname(__file__))
 
-from app.comprehensive_style_service import comprehensive_style_service
+from app.services.comprehensive_style_service import comprehensive_style_service
 
 
 def test_style_transformations():

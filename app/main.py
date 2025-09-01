@@ -1,14 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
-from .models import (
+from .models.models import (
     CorrectionRequest, CorrectionResponse, HealthResponse, Correction, Suggestion,
     ComprehensiveRequest, ComprehensiveResponse, StyleImprovement, StyleOption
 )
-from .advanced_spellcheck_service import (
+from .services.advanced_spellcheck_service import (
     advanced_spellcheck_service as spellcheck_service,
 )
-from .comprehensive_style_service import comprehensive_style_service
+from .services.comprehensive_style_service import comprehensive_style_service
 from .config import settings
 
 app = FastAPI(
