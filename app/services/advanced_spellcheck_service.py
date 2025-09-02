@@ -5,7 +5,7 @@ from transformers import (
     pipeline,
 )
 import traceback
-from .config import settings
+from ..config import settings
 from app.utils import diff_match_patch as dmp_module
 from langgraph.graph import StateGraph, END
 from ..models.state_models import GraphState

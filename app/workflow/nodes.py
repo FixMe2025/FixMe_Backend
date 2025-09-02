@@ -1,6 +1,6 @@
 import torch
 from typing import List, Dict
-from ..state_models import GraphState
+from ..models.state_models import GraphState
 from ..utils.text_processor import TextProcessor
 from ..utils.korean_validator import KoreanValidator
 from ..utils.correction_rules import CorrectionRules
