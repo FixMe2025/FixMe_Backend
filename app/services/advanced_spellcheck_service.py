@@ -28,30 +28,58 @@ class AdvancedSpellCheckService:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             print(f"Using device: {self.device}")
 
-            # 1. 기본 교정 모델 (kogrammar-base)
-            print("Loading kogrammar-base model...")
+            # ============================================================
+            # [기존 모델 - 되돌리려면 아래 주석 해제하고 KoGEC 부분 주석 처리]
+            # ============================================================
+            # # 1. 기본 교정 모델 (kogrammar-base)
+            # print("Loading kogrammar-base model...")
+            # self.tokenizer_base = AutoTokenizer.from_pretrained(settings.MODEL_NAME)
+            # self.model_base = AutoModelForSeq2SeqLM.from_pretrained(settings.MODEL_NAME)
+            # self.model_base.to(self.device)
+            # print("kogrammar-base model loaded.")
+
+            # ============================================================
+            # [현재 사용 모델 - KoGEC 3.3B (BLEU 85.73, GPT-4o 능가)]
+            # ============================================================
+            # 1. 기본 교정 모델 (KoGEC - NLLB 기반)
+            print(f"Loading KoGEC model: {settings.MODEL_NAME}...")
             self.tokenizer_base = AutoTokenizer.from_pretrained(settings.MODEL_NAME)
-            self.model_base = AutoModelForSeq2SeqLM.from_pretrained(settings.MODEL_NAME)
-            self.model_base.to(self.device)
-            print("kogrammar-base model loaded.")
-
-            # 2. LLM 기반 교정 모델 (j5ng/et5-typos-corrector)
-            print("Loading j5ng/et5-typos-corrector model...")
-            lm_model_name = "j5ng/et5-typos-corrector"
-
-            model = AutoModelForSeq2SeqLM.from_pretrained(
-                lm_model_name,
+            self.model_base = AutoModelForSeq2SeqLM.from_pretrained(
+                settings.MODEL_NAME,
                 torch_dtype=torch.bfloat16,
                 device_map="auto",
             )
-            tokenizer = AutoTokenizer.from_pretrained(lm_model_name)
+            # KoGEC는 device_map="auto"로 자동 배치되므로 .to(device) 불필요
+            print(f"KoGEC model loaded: {settings.MODEL_NAME}")
 
-            self.pipe_lm = pipeline(
-                "text2text-generation",
-                model=model,
-                tokenizer=tokenizer,
-            )
-            print("j5ng/et5-typos-corrector model loaded.")
+            # ============================================================
+            # [기존 2차 교정 모델 - 되돌리려면 아래 주석 해제]
+            # ============================================================
+            # # 2. LLM 기반 교정 모델 (j5ng/et5-typos-corrector)
+            # print("Loading j5ng/et5-typos-corrector model...")
+            # lm_model_name = "j5ng/et5-typos-corrector"
+            #
+            # model = AutoModelForSeq2SeqLM.from_pretrained(
+            #     lm_model_name,
+            #     torch_dtype=torch.bfloat16,
+            #     device_map="auto",
+            # )
+            # tokenizer = AutoTokenizer.from_pretrained(lm_model_name)
+            #
+            # self.pipe_lm = pipeline(
+            #     "text2text-generation",
+            #     model=model,
+            #     tokenizer=tokenizer,
+            # )
+            # print("j5ng/et5-typos-corrector model loaded.")
+
+            # ============================================================
+            # [현재 설정 - KoGEC 단일 모델 사용 (2차 교정 비활성화)]
+            # KoGEC 3.3B는 단독으로도 충분히 높은 성능을 제공합니다.
+            # 2차 교정이 필요하면 위 주석을 해제하세요.
+            # ============================================================
+            self.pipe_lm = None  # 2차 교정 비활성화
+            print("Note: Secondary correction model disabled (KoGEC is sufficient)")
 
         except Exception as e:
             print(f"Error during model initialization: {e}")
@@ -60,7 +88,9 @@ class AdvancedSpellCheckService:
             self.pipe_lm = None
 
     def is_model_loaded(self) -> bool:
-        return self.model_base is not None and self.pipe_lm is not None
+        # [수정] KoGEC 단일 모델 사용 시 pipe_lm은 None일 수 있음
+        # 기존: return self.model_base is not None and self.pipe_lm is not None
+        return self.model_base is not None
 
     def get_device_info(self) -> str:
         return str(self.device)

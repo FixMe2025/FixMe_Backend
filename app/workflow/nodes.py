@@ -42,10 +42,10 @@ class WorkflowNodes:
         }
 
     def initial_correction(self, state: GraphState) -> GraphState:
-        """1단계: kogrammar-base 모델을 사용한 기본 교정"""
+        """1단계: 문법 교정 모델을 사용한 기본 교정"""
         print("Running initial correction...")
         text_chunks = state.get("text_chunks", [])
-        
+
         if not text_chunks:
             # 분할되지 않은 경우 원본 텍스트 사용
             original_text = state["original_text"]
@@ -66,15 +66,17 @@ class WorkflowNodes:
 
             # 1-2. 모델 기반 교정
             try:
-                # 입력 텍스트에 적절한 프롬프트 추가 (kogrammar-base 모델용)
+                # 입력 텍스트에 적절한 프롬프트 추가
                 model_input = text_after_dict
-                
+
+                # [수정] device_map="auto" 사용 시 모델의 실제 디바이스로 입력 전송
+                model_device = next(self.model_base.parameters()).device
                 inputs = self.tokenizer_base.encode(
-                    model_input, 
+                    model_input,
                     return_tensors="pt",
                     max_length=300,
                     truncation=True
-                ).to(self.device)
+                ).to(model_device)
                 
                 with torch.no_grad():
                     outputs = self.model_base.generate(
